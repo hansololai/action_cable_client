@@ -1,14 +1,14 @@
 # frozen_string_literal: true
 
 # required gems
-require 'websocket-eventmachine-client'
 require 'forwardable'
 require 'json'
-
+require 'faye/websocket'
 # local files
 require 'action_cable_client/errors'
 require 'action_cable_client/message_factory'
 require 'action_cable_client/message'
+
 
 class ActionCableClient
   extend Forwardable
@@ -24,7 +24,7 @@ class ActionCableClient
   # [ action, data ]
   attr_accessor :message_queue, :_subscribed, :_subscribed_callback, :_pinged_callback, :_connected_callback
 
-  def_delegator :_websocket_client, :onerror, :errored
+  #def_delegator :_websocket_client, :onerror, :errored
   def_delegator :_websocket_client, :send, :send_msg
 
   # @param [String] uri - e.g.: ws://domain:port
@@ -57,7 +57,9 @@ class ActionCableClient
     # - close - closes the connection and optionally sends close frame to server. `close(code, data)`
     # - ping - sends a ping
     # - pong - sends a pong
-    @_websocket_client = WebSocket::EventMachine::Client.connect(uri: @_uri, headers: headers)
+    #  @_websocket_client = WebSocket::EventMachine::Client.connect(uri: @_uri, headers: headers)
+    headers.stringify_keys!
+    @_websocket_client = Faye::WebSocket::Client.new(@_uri,nil, headers: headers) 
   end
 
   # @param [String] action - how the message is being sent
@@ -76,7 +78,7 @@ class ActionCableClient
   #     puts message
   #   end
   def received
-    _websocket_client.onmessage do |message, _type|
+    _websocket_client.on :message do |message, _type|
       handle_received_message(message) do |json|
         yield(json)
       end
@@ -128,7 +130,7 @@ class ActionCableClient
   #     # cleanup after the server disconnects from the client
   #   end
   def disconnected
-    _websocket_client.onclose do
+    _websocket_client.on :close do
       self._subscribed = false
       yield
     end
@@ -138,10 +140,17 @@ class ActionCableClient
     self._pinged_callback = block
   end
 
+  def errored
+    _websocket_client.on :error do |message|
+            yield(message) if block_given?
+            puts "Error #{message}"
+    end
+  end
   private
 
-  # @param [String] message - the websockt message object
+  # @param [Faye Event Object] message - the websockt message object
   def handle_received_message(message)
+    message = message.data 
     return if message.empty?
     json = JSON.parse(message)
 
