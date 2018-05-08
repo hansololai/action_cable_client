@@ -34,7 +34,11 @@ class ActionCableClient
   # @param [Boolean] connect_on_start - connects on init when true
   #                                   - otherwise manually call `connect!`
   # @param [Hash] headers - HTTP headers to use in the handshake
+
   def initialize(uri, params = '', connect_on_start = true, headers = {})
+    @con_on_start = connect_on_start
+    @header_bk = headers.clone #this is important
+    @p = params
     @_uri = uri
     @message_queue = []
     @_subscribed = false
@@ -42,8 +46,20 @@ class ActionCableClient
     @_message_factory = MessageFactory.new(params)
 
     connect!(headers) if connect_on_start
+    post_connect
   end
 
+  # Every time it connects, a new client is created, so have to re-link the callbacks
+  def post_connect
+    connected
+    received
+    disconnected
+    errored
+  end
+
+  def reconnect
+    initialize(@_uri, @p,@con_on_start,@header_bk)
+  end
   def connect!(headers = {})
     # Quick Reference for WebSocket::EM::Client's api
     # - onopen - called after successfully connecting
@@ -133,6 +149,9 @@ class ActionCableClient
     _websocket_client.on :close do
       self._subscribed = false
       yield
+      EM.add_timer(2) do 
+        reconnect
+      end
     end
   end
 
