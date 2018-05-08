@@ -26,6 +26,7 @@ Gem::Specification.new do |s|
   s.required_ruby_version = '>= 2.2.2'
 
   s.add_runtime_dependency 'websocket-eventmachine-client', '>= 1.2.0'
+  s.add_runtime_dependency 'faye-websocket'
 
   s.add_development_dependency 'rspec'
   s.add_development_dependency 'pry-byebug'
